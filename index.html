@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sınav Hazırlık Uygulaması</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <!-- Canvas Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e0f2fe; /* Soluk mavi arka plan */
+        }
+        .container {
+            max-width: 800px;
+        }
+        .question-card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .correct {
+            background-color: #10B981 !important;
+            color: white !important;
+            border-color: #10B981 !important;
+        }
+        .incorrect {
+            background-color: #EF4444 !important;
+            color: white !important;
+            border-color: #EF4444 !important;
+        }
+        .option-button:hover:not(:disabled) {
+            background-color: #e5e7eb;
+        }
+        .option-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .file-input-label {
+            cursor: pointer;
+            padding: 12px 24px;
+            background-color: #d1d5db;
+            color: #4b5563;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .file-input-label:hover {
+            background-color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="container mx-auto px-4 py-8 bg-white rounded-xl shadow-lg">
+        <div class="relative">
+            <button id="back-button" class="hidden absolute top-0 left-0 text-gray-500 hover:text-gray-800 transition-colors p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+            </button>
+            <div class="flex items-center justify-center gap-4 mb-4">
+                <h1 id="app-title" class="text-3xl font-bold text-blue-600 text-center uppercase">ERKAN KARABOĞA</h1>
+            </div>
+        </div>
+        <p class="text-center text-gray-600 mb-6" id="app-description">Notlarınızı kullanma yöntemini seçin.</p>
+        
+        <!-- Ana Seçim Ekranı -->
+        <div id="selection-screen" class="flex flex-col items-center justify-center gap-6 mt-12">
+            <div id="motivation-quote" class="text-center italic text-gray-500 max-w-sm mb-6">
+                <!-- Motivasyon cümlesi buraya gelecek -->
+            </div>
+            <button id="pdf-mode-button" class="cursor-pointer w-64 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors text-xl">
+                PDF Yükle
+            </button>
+            <button id="canvas-mode-button" class="cursor-pointer w-64 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors text-xl">
+                Notlarını Yaz
+            </button>
+            <button id="image-mode-button" class="cursor-pointer w-64 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors text-xl">
+                Görsel Yükle
+            </button>
+        </div>
+
+        <!-- PDF Bölümü (Varsayılan olarak gizli) -->
+        <div id="pdf-section" class="hidden">
+             <div class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 rounded-xl mb-6">
+                <div class="flex items-center justify-between w-full mb-4 px-2">
+                    <label for="question-count" class="text-gray-700 font-medium whitespace-nowrap mr-4">Soru Sayısı:</label>
+                    <input type="number" id="question-count" value="5" min="1" max="50" class="w-20 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center">
+                </div>
+                <input type="file" id="pdf-file-input" class="hidden" accept="application/pdf">
+                <label for="pdf-file-input" class="file-input-label">Notlarınızı yükleyin ve sorular oluşturun.</label>
+                <span id="file-name" class="mt-2 text-sm text-gray-500">Henüz dosya seçilmedi</span>
+                <div class="flex flex-wrap justify-center gap-4 w-full mt-4">
+                    <button id="generate-button-pdf" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Soruları ✨ Oluştur
+                    </button>
+                    <button id="summarize-button-pdf" class="cursor-pointer bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Konuyu ✨ Özetle
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Not Yazma Bölümü (Varsayılan olarak gizli) -->
+        <div id="canvas-section" class="hidden">
+             <div class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 rounded-xl mb-6">
+                 <div class="flex items-center justify-between w-full mb-4 px-2">
+                    <label for="question-count-canvas" class="text-gray-700 font-medium whitespace-nowrap mr-4">Soru Sayısı:</label>
+                    <input type="number" id="question-count-canvas" value="5" min="1" max="50" class="w-20 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center">
+                </div>
+                <textarea id="notes-textarea" class="w-full p-4 h-64 border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 mb-4 text-gray-700" placeholder="Notlarınızı buraya yazın veya yapıştırın..."></textarea>
+                <div class="flex flex-wrap justify-center gap-4 w-full mt-4">
+                    <button id="generate-button-canvas" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Soruları ✨ Oluştur
+                    </button>
+                    <button id="summarize-button-canvas" class="cursor-pointer bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Konuyu ✨ Özetle
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Görsel Bölümü (Varsayılan olarak gizli) -->
+        <div id="image-section" class="hidden">
+            <div class="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 rounded-xl mb-6">
+                <div class="flex items-center justify-between w-full mb-4 px-2">
+                    <label for="question-count-image" class="text-gray-700 font-medium whitespace-nowrap mr-4">Soru Sayısı:</label>
+                    <input type="number" id="question-count-image" value="5" min="1" max="50" class="w-20 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center">
+                </div>
+                <input type="file" id="image-file-input" class="hidden" accept="image/*">
+                <label for="image-file-input" class="file-input-label">Görsel Yüklemek İçin Tıkla</label>
+                <span id="image-file-name" class="mt-2 text-sm text-gray-500">Henüz görsel seçilmedi</span>
+                <div class="flex flex-wrap justify-center gap-4 w-full mt-4">
+                    <button id="generate-button-image" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Soruları ✨ Oluştur
+                    </button>
+                    <button id="summarize-button-image" class="cursor-pointer bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                        Konuyu ✨ Özetle
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ortak Alanlar -->
+        <div id="common-section" class="hidden">
+            <!-- Yükleniyor Göstergesi -->
+            <div id="loading-spinner" class="hidden flex flex-col items-center justify-center py-10">
+                <div class="spinner mb-4"></div>
+                <p class="text-blue-500 font-medium">İşleniyor...</p>
+            </div>
+
+            <!-- Hata Mesajı -->
+            <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
+                <span class="block sm:inline" id="error-text">Bir hata oluştu! Lütfen daha sonra tekrar deneyin.</span>
+            </div>
+
+            <!-- Sorular ve Özet Bölümü -->
+            <div id="content-container" class="space-y-8">
+                <!-- Sorular veya özet buraya dinamik olarak eklenecek -->
+            </div>
+            
+            <!-- Kontrol Butonları -->
+            <div id="control-buttons" class="hidden mt-8 flex flex-wrap justify-center gap-4">
+                <button id="new-questions-button" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Yeni Sorular Oluştur
+                </button>
+                <button id="refresh-button" class="cursor-pointer bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Geri Dön
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // HTML Elementleri
+        const appTitle = document.getElementById('app-title');
+        const selectionScreen = document.getElementById('selection-screen');
+        const pdfModeButton = document.getElementById('pdf-mode-button');
+        const canvasModeButton = document.getElementById('canvas-mode-button');
+        const imageModeButton = document.getElementById('image-mode-button');
+        const pdfSection = document.getElementById('pdf-section');
+        const canvasSection = document.getElementById('canvas-section');
+        const imageSection = document.getElementById('image-section');
+        const commonSection = document.getElementById('common-section');
+        const backButton = document.getElementById('back-button');
+        const motivationQuoteDiv = document.getElementById('motivation-quote');
+
+        const pdfFileInput = document.getElementById('pdf-file-input');
+        const fileNameSpan = document.getElementById('file-name');
+        const imageFileInput = document.getElementById('image-file-input');
+        const imageFileNameSpan = document.getElementById('image-file-name');
+        const notesTextarea = document.getElementById('notes-textarea');
+        const generateButtonPdf = document.getElementById('generate-button-pdf');
+        const summarizeButtonPdf = document.getElementById('summarize-button-pdf');
+        const generateButtonCanvas = document.getElementById('generate-button-canvas');
+        const summarizeButtonCanvas = document.getElementById('summarize-button-canvas');
+        const generateButtonImage = document.getElementById('generate-button-image');
+        const summarizeButtonImage = document.getElementById('summarize-button-image');
+
+        const questionCountInputPdf = document.getElementById('question-count');
+        const questionCountInputCanvas = document.getElementById('question-count-canvas');
+        const questionCountInputImage = document.getElementById('question-count-image');
+
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const contentContainer = document.getElementById('content-container');
+        const errorMessageDiv = document.getElementById('error-message');
+        const errorTextSpan = document.getElementById('error-text');
+        const controlButtonsDiv = document.getElementById('control-buttons');
+        const newQuestionsButton = document.getElementById('new-questions-button');
+        const refreshButton = document.getElementById('refresh-button'); 
+
+        let sourceText = '';
+        let sourceImageBase64 = '';
+        let currentMode = ''; // 'pdf', 'canvas' or 'image'
+
+        // Sabitler
+        const apiKey = "AIzaSyCx3bTMD73bVSVmHfvRIQhra8OTVSi7X_Q";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        // Motivasyon cümleleri (100 adet)
+        const quotes = [
+            "Başarı, küçük çabaların tekrar tekrar yapılmasıdır. - Robert Collier",
+            "Yaşamın anlamı, onu keşfedebilmek için bir amaca sahip olmaktır. - Bruce Lee",
+            "Yapabileceğine inanan kişi, doğru yoldadır. - Henry Ford",
+            "Yapamayacağın şeyleri, yapabileceğin şeylere engel olmamalıdır. - John Wooden",
+            "En iyi intikam, büyük başarıdır. - Frank Sinatra",
+            "Mükemmellik, bir alışkanlıktır. - Aristoteles",
+            "Hayat bir bisiklet gibidir. Dengede kalmak için ilerlemeniz gerekir. - Albert Einstein",
+            "Düşlerinizi takip edin, gerisi gelir. - William Shakespeare",
+            "İnanmak, her şeyin başlangıcıdır.",
+            "Hiçbir zaman vazgeçme, çünkü harika şeyler zaman alır. - Marilyn Monroe",
+            "Hayallerinizi takip edin, onlar doğru yolu bilirler. - Walt Disney",
+            "İmkansız, sadece büyük bir kelime. Her şey mümkündür.",
+            "Başarının sırrı, amacın sadeliğindedir. - Vince Lombardi",
+            "Her gün, yeni bir başlangıçtır. - Seneca",
+            "Başlamak için mükemmel olmak zorunda değilsin, ama mükemmel olmak için başlamak zorundasın. - Zig Ziglar",
+            "Hayatınızın en mutlu anı, hayal gücünüzü gerçeğe dönüştürdüğünüz andır. - John F. Kennedy",
+            "Yürüdüğünüz yol ne kadar zor olursa olsun, amacınıza ulaşana kadar pes etmeyin.",
+            "Hayat bir kitaptır ve seyahat etmeyenler sadece bir sayfasını okur. - Saint Augustine",
+            "Başarısızlık, tekrar başlamak için bir fırsattır. - Henry Ford",
+            "Büyük işler, ancak büyük bir tutkuyla yapılır. - Vincent Van Gogh",
+            "Gelecek, hayallerinin güzelliğine inananlara aittir. - Eleanor Roosevelt",
+            "Cesaret, korkudan vazgeçmek değil, korkunun üstesinden gelmektir. - Nelson Mandela",
+            "Eğer bir şeyi hayal edebiliyorsanız, onu yapabilirsiniz. - Walt Disney",
+            "Büyük bir başarıya ulaşmanın tek yolu, yaptığınız işi sevmektir. - Steve Jobs",
+            "Bilgi, güçtür. - Francis Bacon",
+            "Eğer rüzgar yoksa, küreklere asılın. - Latin Atasözü",
+            "Yaptığınız şeyden korkmayın, denememekten korkun. - Mark Zuckerberg",
+            "Engeller, amacınızdan vazgeçmek için değil, sizi daha iyi olmaya zorlamak için vardır.",
+            "Her şeyin bir zamanı vardır ve her zaman doğru bir an vardır. - John Steinbeck",
+            "Kendinize inanın, gerisi zaten gelir.",
+            "Sınırlar, sadece aklınızdadır.",
+            "Başarı, denemeye devam etme cesaretine sahip olmaktır.",
+            "En uzun yolculuk bile tek bir adımla başlar. - Lao Tzu",
+            "Siz kendinize değer vermezseniz, kimse size değer vermez.",
+            "Her ne kadar yavaş ilerlerseniz ilerleyin, durmadığınız sürece başaracaksınız. - Confucius",
+            "Hayat, fırtınaların geçmesini beklemek değil, yağmurda dans etmeyi öğrenmektir. - Vivian Greene",
+            "Zorluklar, sizi daha güçlü yapar.",
+            "Her şey, bir fikirle başlar.",
+            "Eğitim, dünyayı değiştirebileceğiniz en güçlü silahtır. - Nelson Mandela",
+            "Dün, bir tarihtir. Yarın, bir gizem. Bugün, bir hediyedir. - Eleanor Roosevelt",
+            "Başarının yolu, her zaman yapım aşamasındadır.",
+            "Yapmak istediklerinizi, bugün yapın.",
+            "Küçük adımlar atın, büyük başarılara ulaşın.",
+            "İnanmak, mümkün kılar.",
+            "Herkesin hayatında bir amacı vardır.",
+            "Ne olursa olsun, her zaman bir umut vardır.",
+            "Başarısızlık, başarının anahtarıdır.",
+            "Her zaman daha iyisini yapabilirsiniz.",
+            "Hayat, öğrenmeye devam etmekle ilgilidir.",
+            "Zaman, en değerli varlıktır.",
+            "Geleceğinizi, bugünden inşa edin.",
+            "Daha iyi bir dünya için çalışın.",
+            "Hayatınızı yaşayın, başkasının değil.",
+            "Herkesin içinde bir kahraman vardır.",
+            "Yolculuk, varış noktasından daha önemlidir.",
+            "En iyi fikirler, en beklenmedik anlarda gelir.",
+            "Yapamayacağın hiçbir şey yok.",
+            "Kendine inanmak, en büyük güçtür.",
+            "Her şeyin bir başlangıcı vardır.",
+            "Düşünceleriniz, geleceğinizi şekillendirir.",
+            "Hayallerinizi takip etmekten asla vazgeçmeyin.",
+            "Öğrenmeye devam etmek, genç kalmanın sırrıdır.",
+            "Hayat, bir maceradır.",
+            "Siz, kendinizi keşfetmeye devam edin.",
+            "Her zaman daha fazlasını isteyin.",
+            "Başarı, azimle gelir.",
+            "Dün, geride kaldı. Bugün, önünüzde.",
+            "Her zaman bir adım daha atın.",
+            "Hayallerinizi gerçekleştirmek için çalışın.",
+            "Başarısızlık, bir derstir.",
+            "Herkesin bir hikayesi vardır.",
+            "Hayat, her anını dolu dolu yaşamaktır.",
+            "Kendinizi sevmekle başlayın.",
+            "Hayat, her şeye rağmen devam ediyor.",
+            "Her zaman, daha iyisini yapabilirsiniz.",
+            "Daha iyi bir gelecek için çalışın.",
+            "Hayalleriniz, sizin geleceğinizdir.",
+            "Başarılı olmak için, önce başarısız olmayı göze alın.",
+            "Hayat, bir yolculuktur ve siz kaptanısınız.",
+            "Her zaman bir çıkış yolu vardır.",
+            "Başarı, sizin için ne anlama geliyorsa, onu bulun.",
+            "Daha iyi bir siz olmak için çalışın.",
+            "Hayat, bir macera olmalı.",
+            "Her zaman öğrenmeye açık olun.",
+            "Başarı, sizin kararlılığınızdan gelir.",
+            "Hayatınızı, kendinize göre şekillendirin.",
+            "Her zaman, bir şeyler öğrenmeye devam edin.",
+            "Başarısızlık, başarının gizli anahtarıdır.",
+            "Hayat, her anında bir ders verir.",
+            "Kendinizi, her gün daha iyi yapın.",
+            "Daha iyi bir hayat için çalışın.",
+            "Hayallerinizin peşinden gidin.",
+            "Başarı, sizin için ne anlama geliyorsa, onu takip edin.",
+            "Hayat, kendinizi keşfetmekle ilgilidir.",
+            "Her zaman, daha iyi bir yol vardır.",
+            "Başarı, sizinle başlar.",
+            "Hayat, bir öğrenme sürecidir.",
+            "Her zaman, bir adım daha atın.",
+            "Başarısızlık, sadece bir adımdır.",
+            "Hayat, bir oyun gibidir ve siz kazanmak için buradasınız.",
+            "Kendinizi, en iyi versiyonunuza dönüştürün.",
+            "Hayat, sizin yazdığınız bir kitaptır.",
+            "Her zaman, daha iyi bir son yazabilirsiniz.",
+            "Başarı, her zaman bir seçimdir.",
+            "Hayat, her anınızı değerli kılmakla ilgilidir.",
+            "Kendinize, inanmaya devam edin."
+        ];
+        
+        // Rastgele motivasyon cümlesini seç ve göster
+        function showRandomQuote() {
+            const randomIndex = Math.floor(Math.random() * quotes.length);
+            motivationQuoteDiv.textContent = quotes[randomIndex];
+        }
+
+        // Sayfa yüklendiğinde rastgele bir motivasyon cümlesi göster
+        window.addEventListener('load', showRandomQuote);
+
+        // Ekran modlarını değiştirme
+        pdfModeButton.addEventListener('click', () => {
+            selectionScreen.classList.add('hidden');
+            pdfSection.classList.remove('hidden');
+            commonSection.classList.remove('hidden');
+            backButton.classList.remove('hidden');
+            currentMode = 'pdf';
+            appTitle.textContent = 'Sınavı Parçala';
+            document.getElementById('app-description').textContent = "Notlarınızı yükleyin ve sorular oluşturun.";
+        });
+        
+        canvasModeButton.addEventListener('click', () => {
+            selectionScreen.classList.add('hidden');
+            canvasSection.classList.remove('hidden');
+            commonSection.classList.remove('hidden');
+            backButton.classList.remove('hidden');
+            currentMode = 'canvas';
+            appTitle.textContent = 'Sınavı Parçala';
+            document.getElementById('app-description').textContent = "Notlarınızı buraya yazın veya yapıştırın ve sorular oluşturun.";
+        });
+        
+        imageModeButton.addEventListener('click', () => {
+            selectionScreen.classList.add('hidden');
+            imageSection.classList.remove('hidden');
+            commonSection.classList.remove('hidden');
+            backButton.classList.remove('hidden');
+            currentMode = 'image';
+            appTitle.textContent = 'Sınavı Parçala';
+            document.getElementById('app-description').textContent = "Görseldeki notlarınızı analiz edin ve sorular oluşturun.";
+        });
+        
+        // Uygulamayı başlangıç durumuna döndüren fonksiyon
+        function resetApp() {
+            sourceText = '';
+            pdfFileInput.value = '';
+            fileNameSpan.textContent = 'Henüz dosya seçilmedi';
+            imageFileInput.value = '';
+            imageFileNameSpan.textContent = 'Henüz görsel seçilmedi';
+            notesTextarea.value = '';
+            contentContainer.innerHTML = '';
+            hideError();
+            controlButtonsDiv.classList.add('hidden');
+            
+            pdfSection.classList.add('hidden');
+            canvasSection.classList.add('hidden');
+            imageSection.classList.add('hidden');
+            commonSection.classList.add('hidden');
+            backButton.classList.add('hidden');
+            selectionScreen.classList.remove('hidden');
+            appTitle.textContent = 'ERKAN KARABOĞA';
+            document.getElementById('app-description').textContent = "Notlarınızı kullanma yöntemini seçin.";
+            showRandomQuote(); // Ana ekrana dönüldüğünde yeni bir motivasyon cümlesi göster
+        }
+
+        // Geri dönme butonlarına event listener ekleme
+        backButton.addEventListener('click', resetApp);
+        refreshButton.addEventListener('click', resetApp);
+
+
+        // Utility fonksiyonları
+        function showLoading(message) {
+            loadingSpinner.querySelector('p').textContent = message;
+            loadingSpinner.classList.remove('hidden');
+            loadingSpinner.classList.add('flex');
+            contentContainer.innerHTML = '';
+            controlButtonsDiv.classList.add('hidden');
+            hideError();
+        }
+
+        function hideLoading() {
+            loadingSpinner.classList.add('hidden');
+            loadingSpinner.classList.remove('flex');
+        }
+
+        function showError(message) {
+            errorTextSpan.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorMessageDiv.classList.add('hidden');
+        }
+        
+        function sanitizeText(text) {
+            return text.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+        }
+        
+        function getQuestionCount() {
+            switch (currentMode) {
+                case 'pdf':
+                    return parseInt(questionCountInputPdf.value, 10);
+                case 'canvas':
+                    return parseInt(questionCountInputCanvas.value, 10);
+                case 'image':
+                    return parseInt(questionCountInputImage.value, 10);
+                default:
+                    return 5;
+            }
+        }
+        
+        function getTextToProcess() {
+            switch (currentMode) {
+                case 'pdf':
+                    return sourceText;
+                case 'canvas':
+                    return notesTextarea.value;
+                case 'image':
+                    return sourceText;
+                default:
+                    return '';
+            }
+        }
+        
+        // PDF'ten metin çıkarma
+        pdfFileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            fileNameSpan.textContent = file.name;
+            showLoading("PDF okunuyor...");
+            
+            sourceText = '';
+            
+            try {
+                const pdf = await pdfjsLib.getDocument({ url: URL.createObjectURL(file) }).promise;
+                const totalPages = pdf.numPages;
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    sourceText += textContent.items.map(item => item.str).join(' ');
+                }
+                hideLoading();
+            } catch (error) {
+                console.error('PDF okuma hatası:', error);
+                hideLoading();
+                showError("PDF dosyası okunamadı. Lütfen geçerli bir dosya yükleyin.");
+            }
+        });
+
+        // Görselden metin çıkarma
+        imageFileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            imageFileNameSpan.textContent = file.name;
+            showLoading("Görseldeki metin okunuyor...");
+            
+            sourceText = '';
+
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const base64Data = e.target.result.split(',')[1];
+                    const prompt = "Please extract all text from this image.";
+                    
+                    const payload = {
+                        contents: [
+                            {
+                                role: "user",
+                                parts: [
+                                    { text: prompt },
+                                    {
+                                        inlineData: {
+                                            mimeType: file.type,
+                                            data: base64Data
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                    };
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) throw new Error(`API hatası: ${response.status}`);
+                    
+                    const result = await response.json();
+                    const extractedText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!extractedText) throw new Error("Görselden metin çıkarılamadı.");
+                    
+                    sourceText = extractedText;
+                    hideLoading();
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('Görsel işleme hatası:', error);
+                hideLoading();
+                showError("Görselden metin çıkarılırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
+            }
+        });
+        
+        // LLM ile soru oluşturma
+        async function generateQuestions() {
+            const questionCount = getQuestionCount();
+            const textToProcess = getTextToProcess();
+            
+            if (!textToProcess || textToProcess.length < 50) {
+                showError("Lütfen geçerli bir metin girin veya dosya yükleyin ve dosya en az 50 karakter içersin.");
+                return;
+            }
+            if (questionCount < 1 || questionCount > 50) {
+                showError("Lütfen 1 ile 50 arasında bir soru sayısı girin.");
+                return;
+            }
+            if (!apiKey) {
+                showError("API anahtarı eksik. Lütfen kodu düzenleyerek anahtarınızı ekleyin.");
+                return;
+            }
+            showLoading("Sorular oluşturuluyor...");
+
+            try {
+                const cleanedText = sanitizeText(textToProcess);
+                const systemPrompt = `Sen, öğrenci notlarını çoktan seçmeli sınav sorularına dönüştürmede uzman bir eğitim asistanısın. Kullanıcının notlarını analiz et ve bu notlara dayanan ${questionCount} adet çoktan seçmeli soru oluştur. Her sorunun dört seçeneği (a, b, c, d) ve doğru cevabın indeks numarası (0-3) olmalıdır. Cevapları aşağıdaki JSON şemasına göre Türkçe olarak oluştur.`;
+                const userQuery = `Bu notlara göre çoktan seçmeli sorular oluştur: \n\n${cleanedText}`;
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "questions": {
+                                    type: "ARRAY",
+                                    items: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            "question": { "type": "STRING" },
+                                            "options": {
+                                                "type": "ARRAY",
+                                                "items": { "type": "STRING" }
+                                            },
+                                            "correct_answer_index": { "type": "NUMBER" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) throw new Error("API anahtarı geçersiz.");
+                    throw new Error(`API hatası: ${response.status}`);
+                }
+                const result = await response.json();
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!jsonText) throw new Error("API'den geçerli bir JSON yanıtı alınamadı.");
+                const data = JSON.parse(jsonText);
+                const questions = data.questions;
+                if (!questions || questions.length === 0) {
+                    showError("Notlarınızdan soru oluşturulamadı. Lütfen daha kapsamlı notlar girin.");
+                    hideLoading();
+                    return;
+                }
+                hideLoading();
+                renderQuestions(questions);
+            } catch (error) {
+                console.error("Hata:", error);
+                hideLoading();
+                showError(`Bir hata oluştu: ${error.message}.`);
+            }
+        }
+        
+        // LLM ile özet çıkarma
+        async function summarizeNotes() {
+            const textToProcess = getTextToProcess();
+            
+             if (!textToProcess || textToProcess.length < 50) {
+                showError("Lütfen geçerli bir metin girin veya dosya yükleyin ve dosya en az 50 karakter içersin.");
+                return;
+            }
+            if (!apiKey) {
+                showError("API anahtarı eksik. Lütfen kodu düzenleyerek anahtarınızı ekleyin.");
+                return;
+            }
+            showLoading("Özet oluşturuluyor...");
+            try {
+                const cleanedText = sanitizeText(textToProcess);
+                const userQuery = `Aşağıdaki metni özetle: \n\n${cleanedText}`;
+                const payload = { contents: [{ parts: [{ text: userQuery }] }] };
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) throw new Error("API anahtarı geçersiz.");
+                    throw new Error(`API hatası: ${response.status}`);
+                }
+                const result = await response.json();
+                const summaryText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!summaryText) throw new Error("API'den geçerli bir özet yanıtı alınamadı.");
+                hideLoading();
+                renderSummary(summaryText);
+            } catch (error) {
+                console.error("Hata:", error);
+                hideLoading();
+                showError(`Bir hata oluştu: ${error.message}.`);
+            }
+        }
+        
+        // LLM ile yanlış cevap açıklaması
+        async function explainWrongAnswer(question, correctOption, userChoice) {
+            const systemPrompt = `Bir soruyu yanlış cevaplayan bir öğrenciye yardım eden bir eğitim asistanısın. Kullanıcının sorusunu, seçtiği yanlış şıkkı ve doğru cevabı kullanarak, neden doğru cevabın o olduğunu açıklayan kısa ve bilgilendirici bir metin oluştur. Açıklamayı sadece Türkçe olarak ver.`;
+            const userQuery = `Soru: ${question}\nDoğru cevap: ${correctOption}\nYanlış seçilen cevap: ${userChoice}`;
+            
+            try {
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API hatası: ${response.status}`);
+                const result = await response.json();
+                const explanation = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                return explanation || "Açıklama getirilemedi.";
+
+            } catch (error) {
+                console.error("Açıklama hatası:", error);
+                return "Bir hata oluştu, açıklama getirilemedi.";
+            }
+        }
+
+        // Butonlara event listener ekle
+        generateButtonPdf.addEventListener('click', generateQuestions);
+        summarizeButtonPdf.addEventListener('click', summarizeNotes);
+        generateButtonCanvas.addEventListener('click', generateQuestions);
+        summarizeButtonCanvas.addEventListener('click', summarizeNotes);
+        generateButtonImage.addEventListener('click', generateQuestions);
+        summarizeButtonImage.addEventListener('click', summarizeNotes);
+        newQuestionsButton.addEventListener('click', generateQuestions);
+        
+        // Soruları ekrana yazan fonksiyon
+        function renderQuestions(questions) {
+            contentContainer.innerHTML = '';
+            questions.forEach((q, qIndex) => {
+                const questionCard = document.createElement('div');
+                questionCard.className = 'question-card bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6';
+                questionCard.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-700">Soru ${qIndex + 1}: ${q.question}</h2>
+                    </div>
+                    <div class="options-container space-y-3"></div>
+                `;
+                
+                const optionsContainer = questionCard.querySelector('.options-container');
+                q.options.forEach((optionText, oIndex) => {
+                    const optionButton = document.createElement('button');
+                    optionButton.className = 'option-button w-full text-left py-3 px-4 rounded-lg transition-colors border-2 border-gray-300 text-gray-700 font-medium';
+                    optionButton.textContent = optionText;
+                    optionButton.setAttribute('data-index', oIndex);
+
+                    optionButton.addEventListener('click', () => {
+                        handleAnswer(optionButton, q.correct_answer_index, optionsContainer, q.question, q.options);
+                    });
+                    optionsContainer.appendChild(optionButton);
+                });
+
+                contentContainer.appendChild(questionCard);
+            });
+            controlButtonsDiv.classList.remove('hidden');
+        }
+        
+        // Özeti ekrana yazan fonksiyon
+        function renderSummary(summary) {
+            contentContainer.innerHTML = '';
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'bg-gray-50 p-6 rounded-xl border border-gray-200';
+            summaryCard.innerHTML = `
+                <h2 class="text-xl font-bold text-gray-700 mb-4">Notların Özeti</h2>
+                <p class="text-gray-700 whitespace-pre-wrap">${summary}</p>
+            `;
+            contentContainer.appendChild(summaryCard);
+            controlButtonsDiv.classList.remove('hidden');
+        }
+
+        // Cevapları kontrol eden ve geri bildirim veren fonksiyon
+        async function handleAnswer(selectedButton, correctIndex, optionsContainer, question, options) {
+            const allButtons = optionsContainer.querySelectorAll('.option-button');
+            const selectedIndex = parseInt(selectedButton.getAttribute('data-index'));
+
+            allButtons.forEach(button => {
+                const buttonIndex = parseInt(button.getAttribute('data-index'));
+                if (buttonIndex === correctIndex) {
+                    button.classList.add('correct');
+                    // Doğru cevapta konfeti efektini tetikle
+                    if (selectedIndex === correctIndex) {
+                        confetti({
+                            particleCount: 100,
+                            spread: 70,
+                            origin: { y: 0.6 }
+                        });
+                    }
+                }
+                if (button === selectedButton && selectedIndex !== correctIndex) {
+                    selectedButton.classList.add('incorrect');
+                }
+                button.disabled = true;
+            });
+            
+            // Yanlış cevap için açıklama göster
+            if (selectedIndex !== correctIndex) {
+                const wrongAnswerExplanation = document.createElement('div');
+                wrongAnswerExplanation.className = 'mt-4 p-4 bg-red-50 rounded-lg text-red-700 text-sm';
+                wrongAnswerExplanation.textContent = 'Açıklama bekleniyor...';
+                optionsContainer.parentNode.appendChild(wrongAnswerExplanation);
+                
+                const correctOptionText = options[correctIndex];
+                const selectedOptionText = options[selectedIndex];
+                const explanation = await explainWrongAnswer(question, correctOptionText, selectedOptionText);
+                wrongAnswerExplanation.textContent = explanation;
+            }
+        }
+    </script>
+</body>
+</html>
